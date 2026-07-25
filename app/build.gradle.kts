@@ -11,11 +11,18 @@ android {
         applicationId = "br.gov.bomsucesso.threadsdownloader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 34
-        versionName = "3.3.1-relsposed"
+        versionCode = 35
+        versionName = "3.3.2-relsposed"
+    }
 
-        multiDexEnabled = true
-        multiDexKeepFile = file("multidex-keep.txt")
+    buildTypes {
+        getByName("debug") {
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
     }
 
     buildFeatures {
