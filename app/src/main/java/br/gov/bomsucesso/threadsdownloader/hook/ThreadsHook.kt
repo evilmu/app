@@ -2,9 +2,11 @@ package br.gov.bomsucesso.threadsdownloader.hook
 
 import android.app.AlertDialog
 import android.app.AndroidAppHelper
+import android.app.Application
 import android.app.Dialog
 import android.app.DownloadManager
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
@@ -28,7 +30,11 @@ class ThreadsHook : IXposedHookLoadPackage {
 
     companion object {
         private const val THREADS_PACKAGE = "com.instagram.barcelona"
-        private const val INJECTED_TAG = "threads_downloader_menu_v2"
+        private const val MODULE_PACKAGE = "br.gov.bomsucesso.threadsdownloader"
+        private const val ACTION_CAPTURED = "$MODULE_PACKAGE.MEDIA_CAPTURED"
+        private const val ACTION_HOOK_ACTIVE = "$MODULE_PACKAGE.HOOK_ACTIVE"
+        private const val SETTINGS_URI = "content://$MODULE_PACKAGE.settings/current"
+        private const val INJECTED_TAG = "threads_downloader_menu_v3"
         private const val MAX_URLS = 24
         private val mediaUrls = ArrayDeque<String>()
     }
@@ -36,10 +42,24 @@ class ThreadsHook : IXposedHookLoadPackage {
     override fun handleLoadPackage(param: XC_LoadPackage.LoadPackageParam) {
         if (param.packageName != THREADS_PACKAGE) return
 
-        XposedBridge.log("ThreadsDownloader: Threads carregado em ${param.processName}")
+        XposedBridge.log("ThreadsEnhancer: Threads carregado em ${param.processName}")
+        hookApplicationStatus()
         hookJavaNetUrl()
         hookAndroidUri()
         hookBottomSheets()
+    }
+
+    private fun hookApplicationStatus() {
+        runCatching {
+            XposedBridge.hookAllMethods(Application::class.java, "onCreate", object : XC_MethodHook() {
+                override fun afterHookedMethod(param: MethodHookParam) {
+                    val application = param.thisObject as? Application ?: return
+                    if (application.packageName == THREADS_PACKAGE) {
+                        sendModuleBroadcast(application, ACTION_HOOK_ACTIVE)
+                    }
+                }
+            })
+        }.onFailure { XposedBridge.log("ThreadsEnhancer Application hook: ${it.message}") }
     }
 
     private fun hookJavaNetUrl() {
@@ -49,7 +69,7 @@ class ThreadsHook : IXposedHookLoadPackage {
                     rememberMedia(param.thisObject?.toString())
                 }
             })
-        }.onFailure { XposedBridge.log("ThreadsDownloader URL hook: ${it.message}") }
+        }.onFailure { XposedBridge.log("ThreadsEnhancer URL hook: ${it.message}") }
     }
 
     private fun hookAndroidUri() {
@@ -64,7 +84,7 @@ class ThreadsHook : IXposedHookLoadPackage {
                     }
                 }
             )
-        }.onFailure { XposedBridge.log("ThreadsDownloader Uri hook: ${it.message}") }
+        }.onFailure { XposedBridge.log("ThreadsEnhancer Uri hook: ${it.message}") }
     }
 
     private fun hookBottomSheets() {
@@ -74,11 +94,11 @@ class ThreadsHook : IXposedHookLoadPackage {
                     val dialog = param.thisObject as? Dialog ?: return
                     dialog.window?.decorView?.post {
                         runCatching { injectMenu(dialog) }
-                            .onFailure { XposedBridge.log("ThreadsDownloader menu: ${it.message}") }
+                            .onFailure { XposedBridge.log("ThreadsEnhancer menu: ${it.message}") }
                     }
                 }
             })
-        }.onFailure { XposedBridge.log("ThreadsDownloader Dialog hook: ${it.message}") }
+        }.onFailure { XposedBridge.log("ThreadsEnhancer Dialog hook: ${it.message}") }
     }
 
     private fun injectMenu(dialog: Dialog) {
@@ -88,25 +108,36 @@ class ThreadsHook : IXposedHookLoadPackage {
 
         val target = findBestVerticalContainer(content) ?: content
         val context = target.context
+        val moduleSettings = readModuleSettings(context)
+        if (!moduleSettings.download && !moduleSettings.options) return
+
+        sendModuleBroadcast(context, ACTION_HOOK_ACTIVE)
+
         val section = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             tag = INJECTED_TAG
             setPadding(0, dp(context, 6), 0, dp(context, 6))
         }
 
-        section.addView(createMenuRow(context, "Baixar", android.R.drawable.stat_sys_download) {
-            val url = synchronized(mediaUrls) { mediaUrls.lastOrNull() }
-            if (url == null) {
-                Toast.makeText(context, "Abra a mídia antes de baixar", Toast.LENGTH_LONG).show()
-            } else {
-                enqueueDownload(context, url)
-                dialog.dismiss()
-            }
-        })
+        if (moduleSettings.download) {
+            section.addView(createMenuRow(context, "Baixar", android.R.drawable.stat_sys_download) {
+                val url = synchronized(mediaUrls) {
+                    mediaUrls.toList().asReversed().firstOrNull { isAllowed(it, moduleSettings) }
+                }
+                if (url == null) {
+                    Toast.makeText(context, "Abra a mídia antes de baixar", Toast.LENGTH_LONG).show()
+                } else {
+                    enqueueDownload(context, url, moduleSettings.notifications)
+                    dialog.dismiss()
+                }
+            })
+        }
 
-        section.addView(createMenuRow(context, "Opções de download", android.R.drawable.ic_menu_manage) {
-            showDownloadOptions(context, dialog)
-        })
+        if (moduleSettings.options) {
+            section.addView(createMenuRow(context, "Opções de download", android.R.drawable.ic_menu_manage) {
+                showDownloadOptions(context, dialog, moduleSettings)
+            })
+        }
 
         val index = if (target.childCount > 1) 1 else target.childCount
         target.addView(
@@ -114,7 +145,7 @@ class ThreadsHook : IXposedHookLoadPackage {
             index,
             ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         )
-        XposedBridge.log("ThreadsDownloader: opções injetadas no menu")
+        XposedBridge.log("ThreadsEnhancer: opções injetadas no menu")
     }
 
     private fun createMenuRow(
@@ -150,8 +181,10 @@ class ThreadsHook : IXposedHookLoadPackage {
         }
     }
 
-    private fun showDownloadOptions(context: Context, parent: Dialog) {
-        val urls = synchronized(mediaUrls) { mediaUrls.toList().asReversed() }
+    private fun showDownloadOptions(context: Context, parent: Dialog, settings: ModuleSettings) {
+        val urls = synchronized(mediaUrls) {
+            mediaUrls.toList().asReversed().filter { isAllowed(it, settings) }
+        }
         if (urls.isEmpty()) {
             Toast.makeText(context, "Nenhuma mídia detectada. Abra o vídeo ou imagem primeiro.", Toast.LENGTH_LONG).show()
             return
@@ -168,10 +201,10 @@ class ThreadsHook : IXposedHookLoadPackage {
             .setTitle("Opções de download")
             .setItems(labels.toTypedArray()) { _, which ->
                 if (limited.size > 1 && which == 0) {
-                    limited.reversed().forEach { enqueueDownload(context, it) }
+                    limited.reversed().forEach { enqueueDownload(context, it, settings.notifications) }
                 } else {
                     val index = if (limited.size > 1) which - 1 else which
-                    limited.getOrNull(index)?.let { enqueueDownload(context, it) }
+                    limited.getOrNull(index)?.let { enqueueDownload(context, it, settings.notifications) }
                 }
                 parent.dismiss()
             }
@@ -179,7 +212,7 @@ class ThreadsHook : IXposedHookLoadPackage {
             .show()
     }
 
-    private fun enqueueDownload(context: Context, url: String) {
+    private fun enqueueDownload(context: Context, url: String, notifications: Boolean) {
         runCatching {
             val video = isVideo(url)
             val extension = if (video) ".mp4" else ".jpg"
@@ -192,14 +225,17 @@ class ThreadsHook : IXposedHookLoadPackage {
                 .setMimeType(mime)
                 .setAllowedOverMetered(true)
                 .setAllowedOverRoaming(false)
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                .setNotificationVisibility(
+                    if (notifications) DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
+                    else DownloadManager.Request.VISIBILITY_HIDDEN
+                )
                 .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Threads/$fileName")
 
             val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             manager.enqueue(request)
             Toast.makeText(context, "Download iniciado", Toast.LENGTH_SHORT).show()
         }.onFailure {
-            XposedBridge.log("ThreadsDownloader download: ${it.message}")
+            XposedBridge.log("ThreadsEnhancer download: ${it.message}")
             Toast.makeText(context, "Não foi possível baixar esta mídia", Toast.LENGTH_LONG).show()
         }
     }
@@ -213,8 +249,37 @@ class ThreadsHook : IXposedHookLoadPackage {
             mediaUrls.addLast(url)
             while (mediaUrls.size > MAX_URLS) mediaUrls.removeFirst()
         }
-        XposedBridge.log("ThreadsDownloader mídia: ${sanitizeForLog(url)}")
+
+        val context = AndroidAppHelper.currentApplication()?.applicationContext
+        if (context != null) sendModuleBroadcast(context, ACTION_CAPTURED, url)
+        XposedBridge.log("ThreadsEnhancer mídia: ${sanitizeForLog(url)}")
     }
+
+    private fun sendModuleBroadcast(context: Context, action: String, url: String? = null) {
+        runCatching {
+            val intent = Intent(action).setPackage(MODULE_PACKAGE)
+            if (url != null) intent.putExtra("url", url)
+            context.sendBroadcast(intent)
+        }.onFailure { XposedBridge.log("ThreadsEnhancer broadcast: ${it.message}") }
+    }
+
+    private fun readModuleSettings(context: Context): ModuleSettings {
+        return runCatching {
+            context.contentResolver.query(Uri.parse(SETTINGS_URI), null, null, null, null)?.use { cursor ->
+                if (!cursor.moveToFirst()) return@use null
+                ModuleSettings(
+                    download = cursor.getInt(cursor.getColumnIndexOrThrow("download")) == 1,
+                    options = cursor.getInt(cursor.getColumnIndexOrThrow("options")) == 1,
+                    videos = cursor.getInt(cursor.getColumnIndexOrThrow("videos")) == 1,
+                    images = cursor.getInt(cursor.getColumnIndexOrThrow("images")) == 1,
+                    notifications = cursor.getInt(cursor.getColumnIndexOrThrow("notifications")) == 1
+                )
+            }
+        }.getOrNull() ?: ModuleSettings()
+    }
+
+    private fun isAllowed(url: String, settings: ModuleSettings): Boolean =
+        if (isVideo(url)) settings.videos else settings.images
 
     private fun isLikelyMedia(url: String): Boolean {
         val lower = url.lowercase()
@@ -284,4 +349,12 @@ class ThreadsHook : IXposedHookLoadPackage {
 
     private fun sanitizeForLog(url: String): String =
         url.substringBefore('?') + if ('?' in url) "?…" else ""
+
+    private data class ModuleSettings(
+        val download: Boolean = true,
+        val options: Boolean = true,
+        val videos: Boolean = true,
+        val images: Boolean = true,
+        val notifications: Boolean = true
+    )
 }
