@@ -1,16 +1,21 @@
 package br.gov.bomsucesso.threadsdownloader.hook
 
+import android.app.Activity
 import android.app.AlertDialog
 import android.app.AndroidAppHelper
 import android.app.Application
 import android.app.Dialog
 import android.app.DownloadManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -25,41 +30,89 @@ import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import java.net.URL
 import java.util.ArrayDeque
+import java.util.Collections
+import java.util.WeakHashMap
 
 class ThreadsHook : IXposedHookLoadPackage {
 
     companion object {
         private const val THREADS_PACKAGE = "com.instagram.barcelona"
         private const val MODULE_PACKAGE = "br.gov.bomsucesso.threadsdownloader"
+        private const val RECEIVER_CLASS = "$MODULE_PACKAGE.CapturedMediaReceiver"
         private const val ACTION_CAPTURED = "$MODULE_PACKAGE.MEDIA_CAPTURED"
         private const val ACTION_HOOK_ACTIVE = "$MODULE_PACKAGE.HOOK_ACTIVE"
         private const val SETTINGS_URI = "content://$MODULE_PACKAGE.settings/current"
-        private const val INJECTED_TAG = "threads_downloader_menu_v3"
+        private const val INJECTED_TAG = "threads_enhancer_menu_relsposed_310"
         private const val MAX_URLS = 24
+
         private val mediaUrls = ArrayDeque<String>()
+        private val hookedDialogClasses = Collections.newSetFromMap(WeakHashMap<Class<*>, Boolean>())
     }
 
     override fun handleLoadPackage(param: XC_LoadPackage.LoadPackageParam) {
         if (param.packageName != THREADS_PACKAGE) return
 
-        XposedBridge.log("ThreadsEnhancer: Threads carregado em ${param.processName}")
-        hookApplicationStatus()
+        XposedBridge.log("ThreadsEnhancer/ReLSPosed: pacote carregado em ${param.processName}")
+
+        hookApplicationAttach()
         hookJavaNetUrl()
         hookAndroidUri()
-        hookBottomSheets()
+        hookDialogs(param.classLoader)
+        hookDialogFragments(param.classLoader)
     }
 
-    private fun hookApplicationStatus() {
+    /**
+     * No caminho legado do ReLSPosed, Application.attach é um ponto mais confiável
+     * que Application.onCreate: o Context já existe e o hook ainda ocorre cedo.
+     */
+    private fun hookApplicationAttach() {
         runCatching {
-            XposedBridge.hookAllMethods(Application::class.java, "onCreate", object : XC_MethodHook() {
-                override fun afterHookedMethod(param: MethodHookParam) {
-                    val application = param.thisObject as? Application ?: return
-                    if (application.packageName == THREADS_PACKAGE) {
-                        sendModuleBroadcast(application, ACTION_HOOK_ACTIVE)
+            XposedHelpers.findAndHookMethod(
+                Application::class.java,
+                "attach",
+                Context::class.java,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val application = param.thisObject as? Application ?: return
+                        if (application.packageName != THREADS_PACKAGE) return
+
+                        XposedBridge.log("ThreadsEnhancer/ReLSPosed: Application.attach confirmado")
+                        sendHeartbeat(application)
+                        registerLifecycleHeartbeat(application)
                     }
                 }
+            )
+        }.onFailure {
+            XposedBridge.log("ThreadsEnhancer/ReLSPosed attach hook: ${it.message}")
+        }
+    }
+
+    private fun registerLifecycleHeartbeat(application: Application) {
+        runCatching {
+            application.registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
+                override fun onActivityStarted(activity: Activity) = Unit
+                override fun onActivityResumed(activity: Activity) {
+                    sendHeartbeat(application)
+                    activity.window?.decorView?.postDelayed({
+                        scanActivityForBottomSheets(activity)
+                    }, 250)
+                }
+                override fun onActivityPaused(activity: Activity) = Unit
+                override fun onActivityStopped(activity: Activity) = Unit
+                override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
+                override fun onActivityDestroyed(activity: Activity) = Unit
             })
-        }.onFailure { XposedBridge.log("ThreadsEnhancer Application hook: ${it.message}") }
+        }.onFailure {
+            XposedBridge.log("ThreadsEnhancer/ReLSPosed lifecycle: ${it.message}")
+        }
+    }
+
+    private fun sendHeartbeat(context: Context) {
+        sendModuleBroadcast(context, ACTION_HOOK_ACTIVE)
+        Handler(Looper.getMainLooper()).postDelayed({
+            sendModuleBroadcast(context, ACTION_HOOK_ACTIVE)
+        }, 1200)
     }
 
     private fun hookJavaNetUrl() {
@@ -69,7 +122,9 @@ class ThreadsHook : IXposedHookLoadPackage {
                     rememberMedia(param.thisObject?.toString())
                 }
             })
-        }.onFailure { XposedBridge.log("ThreadsEnhancer URL hook: ${it.message}") }
+        }.onFailure {
+            XposedBridge.log("ThreadsEnhancer/ReLSPosed URL hook: ${it.message}")
+        }
     }
 
     private fun hookAndroidUri() {
@@ -84,29 +139,103 @@ class ThreadsHook : IXposedHookLoadPackage {
                     }
                 }
             )
-        }.onFailure { XposedBridge.log("ThreadsEnhancer Uri hook: ${it.message}") }
+        }.onFailure {
+            XposedBridge.log("ThreadsEnhancer/ReLSPosed Uri hook: ${it.message}")
+        }
     }
 
-    private fun hookBottomSheets() {
+    private fun hookDialogs(classLoader: ClassLoader) {
+        hookDialogClass(Dialog::class.java)
+
+        listOf(
+            "androidx.appcompat.app.AppCompatDialog",
+            "com.google.android.material.bottomsheet.BottomSheetDialog"
+        ).forEach { className ->
+            XposedHelpers.findClassIfExists(className, classLoader)?.let(::hookDialogClass)
+        }
+    }
+
+    private fun hookDialogClass(dialogClass: Class<*>) {
+        synchronized(hookedDialogClasses) {
+            if (!hookedDialogClasses.add(dialogClass)) return
+        }
+
         runCatching {
-            XposedHelpers.findAndHookMethod(Dialog::class.java, "show", object : XC_MethodHook() {
+            XposedBridge.hookAllMethods(dialogClass, "show", object : XC_MethodHook() {
                 override fun afterHookedMethod(param: MethodHookParam) {
                     val dialog = param.thisObject as? Dialog ?: return
-                    dialog.window?.decorView?.post {
+                    dialog.window?.decorView?.postDelayed({
                         runCatching { injectMenu(dialog) }
-                            .onFailure { XposedBridge.log("ThreadsEnhancer menu: ${it.message}") }
-                    }
+                            .onFailure { XposedBridge.log("ThreadsEnhancer/ReLSPosed menu: ${it.message}") }
+                    }, 120)
                 }
             })
-        }.onFailure { XposedBridge.log("ThreadsEnhancer Dialog hook: ${it.message}") }
+        }.onFailure {
+            XposedBridge.log("ThreadsEnhancer/ReLSPosed dialog ${dialogClass.name}: ${it.message}")
+        }
+    }
+
+    private fun hookDialogFragments(classLoader: ClassLoader) {
+        listOf(
+            "androidx.fragment.app.DialogFragment",
+            "com.google.android.material.bottomsheet.BottomSheetDialogFragment"
+        ).forEach { className ->
+            val fragmentClass = XposedHelpers.findClassIfExists(className, classLoader) ?: return@forEach
+            runCatching {
+                XposedBridge.hookAllMethods(fragmentClass, "onStart", object : XC_MethodHook() {
+                    override fun afterHookedMethod(param: MethodHookParam) {
+                        val dialog = runCatching {
+                            XposedHelpers.callMethod(param.thisObject, "getDialog") as? Dialog
+                        }.getOrNull() ?: return
+
+                        dialog.window?.decorView?.postDelayed({
+                            runCatching { injectMenu(dialog) }
+                                .onFailure { XposedBridge.log("ThreadsEnhancer/ReLSPosed fragment menu: ${it.message}") }
+                        }, 120)
+                    }
+                })
+            }.onFailure {
+                XposedBridge.log("ThreadsEnhancer/ReLSPosed fragment $className: ${it.message}")
+            }
+        }
+    }
+
+    private fun scanActivityForBottomSheets(activity: Activity) {
+        val root = activity.window?.decorView as? ViewGroup ?: return
+        scanViewTree(root)
+    }
+
+    private fun scanViewTree(view: View) {
+        if (view is ViewGroup) {
+            if (looksLikeVisibleSheet(view) && findTaggedView(view) == null) {
+                injectIntoContainer(view)
+            }
+            for (index in 0 until view.childCount) {
+                scanViewTree(view.getChildAt(index))
+            }
+        }
+    }
+
+    private fun looksLikeVisibleSheet(group: ViewGroup): Boolean {
+        if (!group.isShown || group.height <= 0 || group.childCount < 3) return false
+        val name = group.javaClass.name.lowercase()
+        val tagText = group.tag?.toString()?.lowercase().orEmpty()
+        return name.contains("bottomsheet") ||
+            name.contains("bottom_sheet") ||
+            tagText.contains("bottomsheet") ||
+            tagText.contains("bottom_sheet")
     }
 
     private fun injectMenu(dialog: Dialog) {
         if (!looksLikeBottomSheet(dialog)) return
         val content = dialog.window?.decorView?.findViewById<ViewGroup>(android.R.id.content) ?: return
-        if (findTaggedView(content) != null) return
+        injectIntoContainer(content) { dialog.dismiss() }
+    }
 
-        val target = findBestVerticalContainer(content) ?: content
+    private fun injectIntoContainer(root: ViewGroup, dismiss: (() -> Unit)? = null) {
+        if (findTaggedView(root) != null) return
+
+        val target = findBestVerticalContainer(root) ?: root
         val context = target.context
         val moduleSettings = readModuleSettings(context)
         if (!moduleSettings.download && !moduleSettings.options) return
@@ -128,14 +257,14 @@ class ThreadsHook : IXposedHookLoadPackage {
                     Toast.makeText(context, "Abra a mídia antes de baixar", Toast.LENGTH_LONG).show()
                 } else {
                     enqueueDownload(context, url, moduleSettings.notifications)
-                    dialog.dismiss()
+                    dismiss?.invoke()
                 }
             })
         }
 
         if (moduleSettings.options) {
             section.addView(createMenuRow(context, "Opções de download", android.R.drawable.ic_menu_manage) {
-                showDownloadOptions(context, dialog, moduleSettings)
+                showDownloadOptions(context, moduleSettings, dismiss)
             })
         }
 
@@ -143,9 +272,12 @@ class ThreadsHook : IXposedHookLoadPackage {
         target.addView(
             section,
             index,
-            ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
         )
-        XposedBridge.log("ThreadsEnhancer: opções injetadas no menu")
+        XposedBridge.log("ThreadsEnhancer/ReLSPosed: opções injetadas no menu")
     }
 
     private fun createMenuRow(
@@ -181,12 +313,20 @@ class ThreadsHook : IXposedHookLoadPackage {
         }
     }
 
-    private fun showDownloadOptions(context: Context, parent: Dialog, settings: ModuleSettings) {
+    private fun showDownloadOptions(
+        context: Context,
+        settings: ModuleSettings,
+        dismiss: (() -> Unit)?
+    ) {
         val urls = synchronized(mediaUrls) {
             mediaUrls.toList().asReversed().filter { isAllowed(it, settings) }
         }
         if (urls.isEmpty()) {
-            Toast.makeText(context, "Nenhuma mídia detectada. Abra o vídeo ou imagem primeiro.", Toast.LENGTH_LONG).show()
+            Toast.makeText(
+                context,
+                "Nenhuma mídia detectada. Abra o vídeo ou imagem primeiro.",
+                Toast.LENGTH_LONG
+            ).show()
             return
         }
 
@@ -201,12 +341,16 @@ class ThreadsHook : IXposedHookLoadPackage {
             .setTitle("Opções de download")
             .setItems(labels.toTypedArray()) { _, which ->
                 if (limited.size > 1 && which == 0) {
-                    limited.reversed().forEach { enqueueDownload(context, it, settings.notifications) }
+                    limited.reversed().forEach {
+                        enqueueDownload(context, it, settings.notifications)
+                    }
                 } else {
                     val index = if (limited.size > 1) which - 1 else which
-                    limited.getOrNull(index)?.let { enqueueDownload(context, it, settings.notifications) }
+                    limited.getOrNull(index)?.let {
+                        enqueueDownload(context, it, settings.notifications)
+                    }
                 }
-                parent.dismiss()
+                dismiss?.invoke()
             }
             .setNegativeButton("Cancelar", null)
             .show()
@@ -229,13 +373,16 @@ class ThreadsHook : IXposedHookLoadPackage {
                     if (notifications) DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED
                     else DownloadManager.Request.VISIBILITY_HIDDEN
                 )
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "Threads/$fileName")
+                .setDestinationInExternalPublicDir(
+                    Environment.DIRECTORY_DOWNLOADS,
+                    "Threads/$fileName"
+                )
 
             val manager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             manager.enqueue(request)
             Toast.makeText(context, "Download iniciado", Toast.LENGTH_SHORT).show()
         }.onFailure {
-            XposedBridge.log("ThreadsEnhancer download: ${it.message}")
+            XposedBridge.log("ThreadsEnhancer/ReLSPosed download: ${it.message}")
             Toast.makeText(context, "Não foi possível baixar esta mídia", Toast.LENGTH_LONG).show()
         }
     }
@@ -251,21 +398,33 @@ class ThreadsHook : IXposedHookLoadPackage {
         }
 
         val context = AndroidAppHelper.currentApplication()?.applicationContext
-        if (context != null) sendModuleBroadcast(context, ACTION_CAPTURED, url)
-        XposedBridge.log("ThreadsEnhancer mídia: ${sanitizeForLog(url)}")
+        if (context != null) {
+            sendModuleBroadcast(context, ACTION_CAPTURED, url)
+        }
+        XposedBridge.log("ThreadsEnhancer/ReLSPosed mídia: ${sanitizeForLog(url)}")
     }
 
     private fun sendModuleBroadcast(context: Context, action: String, url: String? = null) {
         runCatching {
-            val intent = Intent(action).setPackage(MODULE_PACKAGE)
-            if (url != null) intent.putExtra("url", url)
+            val intent = Intent(action).apply {
+                component = ComponentName(MODULE_PACKAGE, RECEIVER_CLASS)
+                if (url != null) putExtra("url", url)
+            }
             context.sendBroadcast(intent)
-        }.onFailure { XposedBridge.log("ThreadsEnhancer broadcast: ${it.message}") }
+        }.onFailure {
+            XposedBridge.log("ThreadsEnhancer/ReLSPosed broadcast: ${it.message}")
+        }
     }
 
     private fun readModuleSettings(context: Context): ModuleSettings {
         return runCatching {
-            context.contentResolver.query(Uri.parse(SETTINGS_URI), null, null, null, null)?.use { cursor ->
+            context.contentResolver.query(
+                Uri.parse(SETTINGS_URI),
+                null,
+                null,
+                null,
+                null
+            )?.use { cursor ->
                 if (!cursor.moveToFirst()) return@use null
                 ModuleSettings(
                     download = cursor.getInt(cursor.getColumnIndexOrThrow("download")) == 1,
@@ -284,6 +443,7 @@ class ThreadsHook : IXposedHookLoadPackage {
     private fun isLikelyMedia(url: String): Boolean {
         val lower = url.lowercase()
         if (!lower.startsWith("https://")) return false
+
         val hostMatches = lower.contains("fbcdn.net") ||
             lower.contains("cdninstagram.com") ||
             lower.contains("instagram.com")
@@ -299,7 +459,9 @@ class ThreadsHook : IXposedHookLoadPackage {
 
     private fun isVideo(url: String): Boolean {
         val lower = url.lowercase()
-        return lower.contains(".mp4") || lower.contains(".m4v") || lower.contains("video")
+        return lower.contains(".mp4") ||
+            lower.contains(".m4v") ||
+            lower.contains("video")
     }
 
     private fun looksLikeBottomSheet(dialog: Dialog): Boolean {
@@ -312,8 +474,8 @@ class ThreadsHook : IXposedHookLoadPackage {
     private fun findTaggedView(root: View): View? {
         if (root.tag == INJECTED_TAG) return root
         if (root is ViewGroup) {
-            for (i in 0 until root.childCount) {
-                findTaggedView(root.getChildAt(i))?.let { return it }
+            for (index in 0 until root.childCount) {
+                findTaggedView(root.getChildAt(index))?.let { return it }
             }
         }
         return null
@@ -324,12 +486,17 @@ class ThreadsHook : IXposedHookLoadPackage {
         var bestChildren = -1
 
         fun visit(view: View) {
-            if (view is LinearLayout && view.orientation == LinearLayout.VERTICAL && view.childCount > bestChildren) {
+            if (view is LinearLayout &&
+                view.orientation == LinearLayout.VERTICAL &&
+                view.childCount > bestChildren
+            ) {
                 best = view
                 bestChildren = view.childCount
             }
             if (view is ViewGroup) {
-                for (i in 0 until view.childCount) visit(view.getChildAt(i))
+                for (index in 0 until view.childCount) {
+                    visit(view.getChildAt(index))
+                }
             }
         }
 
@@ -341,7 +508,9 @@ class ThreadsHook : IXposedHookLoadPackage {
         val value = android.util.TypedValue()
         return if (context.theme.resolveAttribute(android.R.attr.textColorPrimary, value, true)) {
             if (value.resourceId != 0) context.getColor(value.resourceId) else value.data
-        } else Color.WHITE
+        } else {
+            Color.WHITE
+        }
     }
 
     private fun dp(context: Context, value: Int): Int =
