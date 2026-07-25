@@ -80,6 +80,15 @@ class SettingsProvider : ContentProvider() {
                 result(true)
             }
 
+            METHOD_LATEST -> {
+                val url = CapturedUrlStore.read(providerContext)
+                if (url.isNullOrBlank() || !url.startsWith("https://")) {
+                    result(false, "no_media")
+                } else {
+                    result(true).apply { putString("url", url) }
+                }
+            }
+
             METHOD_EVENT -> {
                 val event = extras?.getString("event").orEmpty()
                 val details = extras?.getString("details").orEmpty()
@@ -129,6 +138,7 @@ class SettingsProvider : ContentProvider() {
         const val AUTHORITY = "br.gov.bomsucesso.threadsdownloader.settings"
         const val METHOD_HEARTBEAT = "heartbeat"
         const val METHOD_CAPTURED = "captured"
+        const val METHOD_LATEST = "latest"
         const val METHOD_EVENT = "event"
 
         const val PREFS_SETTINGS = "module_settings"
