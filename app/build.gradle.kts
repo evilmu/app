@@ -11,8 +11,8 @@ android {
         applicationId = "br.gov.bomsucesso.threadsdownloader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 35
-        versionName = "3.3.2-relsposed"
+        versionCode = 36
+        versionName = "3.3.3-relsposed"
     }
 
     buildTypes {
