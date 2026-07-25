@@ -11,8 +11,11 @@ android {
         applicationId = "br.gov.bomsucesso.threadsdownloader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 33
-        versionName = "3.3.0-relsposed"
+        versionCode = 34
+        versionName = "3.3.1-relsposed"
+
+        multiDexEnabled = true
+        multiDexKeepFile = file("multidex-keep.txt")
     }
 
     buildFeatures {
