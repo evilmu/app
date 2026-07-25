@@ -17,18 +17,22 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.ThreadsDownloader">
 
+        <!-- Metadados da API Xposed legada usados pelo ReLSPosed. -->
         <meta-data android:name="xposedmodule" android:value="true" />
         <meta-data android:name="xposeddescription" android:value="@string/module_description" />
         <meta-data android:name="xposedminversion" android:value="82" />
+        <meta-data android:name="xposedscope" android:value="com.instagram.barcelona" />
 
         <provider
             android:name=".SettingsProvider"
             android:authorities="br.gov.bomsucesso.threadsdownloader.settings"
+            android:enabled="true"
             android:exported="true"
             android:grantUriPermissions="false" />
 
         <receiver
             android:name=".CapturedMediaReceiver"
+            android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <action android:name="br.gov.bomsucesso.threadsdownloader.MEDIA_CAPTURED" />
