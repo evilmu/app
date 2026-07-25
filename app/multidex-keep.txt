@@ -1,0 +1,2 @@
+br/gov/bomsucesso/threadsdownloader/hook/ActivationHook.class
+br/gov/bomsucesso/threadsdownloader/hook/ActivationHook$AttachCallback.class
