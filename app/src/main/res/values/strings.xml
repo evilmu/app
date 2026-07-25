@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Threads Downloader</string>
+    <string name="module_description">Captura URLs de mídia carregadas pelo Threads e permite baixar vídeos públicos ou autorizados.</string>
+    <string name="title">Threads Downloader</string>
+    <string name="instructions">1. Ative o módulo no LSPosed somente para o Threads.\n2. Reinicie o Threads.\n3. Abra e reproduza o vídeo.\n4. Volte aqui e toque em “Usar URL capturada”.\n\nTambém é possível compartilhar um link ou URL direta com este aplicativo.</string>
+    <string name="url_hint">Cole uma URL HTTPS de vídeo</string>
+    <string name="use_captured">Usar URL capturada</string>
+    <string name="download">Baixar vídeo</string>
+    <string name="status_ready">Pronto.</string>
+</resources>
