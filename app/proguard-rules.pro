@@ -1,6 +1,6 @@
 # Classes carregadas pelo ReLSPosed a partir de assets/xposed_init ou por reflexão.
 -keep class br.gov.bomsucesso.threadsdownloader.hook.ActivationHook { *; }
--keep class br.gov.bomsucesso.threadsdownloader.hook.ActivationHook$AttachCallback { *; }
+-keep class br.gov.bomsucesso.threadsdownloader.hook.ActivationHook$* { *; }
 -keep class br.gov.bomsucesso.threadsdownloader.hook.ThreadsHook { *; }
 -keep class br.gov.bomsucesso.threadsdownloader.hook.ThreadsHook$* { *; }
 
