@@ -11,8 +11,8 @@ android {
         applicationId = "br.gov.bomsucesso.threadsdownloader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 30
-        versionName = "3.0.0"
+        versionCode = 31
+        versionName = "3.1.0-relsposed"
     }
 
     buildFeatures {
@@ -34,5 +34,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
+
+    // ReLSPosed 1.0.2 usa o caminho legado (Xposed API <= 100).
     compileOnly("de.robv.android.xposed:api:82")
 }
