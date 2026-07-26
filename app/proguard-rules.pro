@@ -1,6 +1,8 @@
-# Classe carregada pelo ReLSPosed a partir de assets/xposed_init.
--keep class br.gov.bomsucesso.threadsdownloader.hook.NativeMenuProbeHook { *; }
--keep class br.gov.bomsucesso.threadsdownloader.hook.NativeMenuProbeHook$* { *; }
+# Entradas carregadas pelo ReLSPosed a partir de assets/xposed_init.
+-keep class br.gov.bomsucesso.threadsdownloader.hook.ShareBridgeHook { *; }
+-keep class br.gov.bomsucesso.threadsdownloader.hook.ShareBridgeHook$* { *; }
+-keep class br.gov.bomsucesso.threadsdownloader.hook.SafeMenuProbeHook { *; }
+-keep class br.gov.bomsucesso.threadsdownloader.hook.SafeMenuProbeHook$* { *; }
 
 # DexKit usa JNI e reflexão para resolver os métodos do APK alvo.
 -keep class org.luckypray.dexkit.** { *; }
