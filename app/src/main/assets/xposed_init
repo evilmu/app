@@ -1,1 +1,2 @@
-br.gov.bomsucesso.threadsdownloader.hook.NativeMenuProbeHook
+br.gov.bomsucesso.threadsdownloader.hook.ShareBridgeHook
+br.gov.bomsucesso.threadsdownloader.hook.SafeMenuProbeHook
