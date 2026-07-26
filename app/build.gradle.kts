@@ -7,27 +7,31 @@ android {
     namespace = "br.gov.bomsucesso.threadsdownloader"
     compileSdk = 35
 
+    signingConfigs {
+        create("stableDebug") {
+            storeFile = rootProject.file("ci/threads-enhancer.keystore")
+            storePassword = "threads123"
+            keyAlias = "threads-enhancer"
+            keyPassword = "threads123"
+        }
+    }
+
     defaultConfig {
         applicationId = "br.gov.bomsucesso.threadsdownloader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 42
-        versionName = "3.4.2-menu-probe"
+        versionCode = 50
+        versionName = "3.5.0-native-menu"
     }
 
     buildTypes {
         getByName("debug") {
             isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("stableDebug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-        }
-    }
-
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
         }
     }
 
@@ -50,7 +54,6 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
-    implementation("org.luckypray:dexkit:2.2.0")
 
     // ReLSPosed usa a API Xposed legada.
     compileOnly("de.robv.android.xposed:api:82")
