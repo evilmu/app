@@ -14,6 +14,7 @@ import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 import org.luckypray.dexkit.DexKitBridge
+import java.io.File
 import java.lang.reflect.Array
 import java.lang.reflect.Field
 import java.lang.reflect.Method
@@ -26,6 +27,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Sonda temporária para localizar o método ofuscado que constrói o menu nativo
  * de publicação do Threads 439.x. Não desenha overlay e não altera o menu.
+ *
+ * A biblioteca DexKit é carregada somente depois de Application.attach. Isso evita
+ * ExceptionInInitializerError durante a criação da classe Xposed.
  */
 class NativeMenuProbeHook : IXposedHookLoadPackage {
 
@@ -34,13 +38,10 @@ class NativeMenuProbeHook : IXposedHookLoadPackage {
         private const val MODULE_PACKAGE = "br.gov.bomsucesso.threadsdownloader"
         private const val PROVIDER_URI = "content://$MODULE_PACKAGE.settings/current"
         private const val RECEIVER_CLASS = "$MODULE_PACKAGE.CapturedMediaReceiver"
-        private const val HOOK_VERSION = "3.4.1-native-menu-probe"
+        private const val HOOK_VERSION = "3.4.2-native-menu-probe"
         private val started = AtomicBoolean(false)
+        private val nativeLoaded = AtomicBoolean(false)
         private val hookedMethods = Collections.newSetFromMap(IdentityHashMap<Method, Boolean>())
-
-        init {
-            System.loadLibrary("dexkit")
-        }
     }
 
     private lateinit var loadParam: XC_LoadPackage.LoadPackageParam
@@ -51,26 +52,57 @@ class NativeMenuProbeHook : IXposedHookLoadPackage {
 
         XposedBridge.log("ThreadsEnhancer/Probe: pacote carregado em ${param.processName}")
 
-        XposedHelpers.findAndHookMethod(
-            Application::class.java,
-            "attach",
-            Context::class.java,
-            object : XC_MethodHook() {
-                override fun afterHookedMethod(hookParam: MethodHookParam) {
-                    val application = hookParam.thisObject as? Application ?: return
-                    if (application.packageName != THREADS_PACKAGE) return
+        runCatching {
+            XposedHelpers.findAndHookMethod(
+                Application::class.java,
+                "attach",
+                Context::class.java,
+                object : XC_MethodHook() {
+                    override fun afterHookedMethod(hookParam: MethodHookParam) {
+                        val application = hookParam.thisObject as? Application ?: return
+                        if (application.packageName != THREADS_PACKAGE) return
 
-                    sendHeartbeat(application, param.processName)
-                    if (param.processName == THREADS_PACKAGE && started.compareAndSet(false, true)) {
-                        installViewDiagnostics()
-                        Thread({ discoverMenuMethods(application) }, "threads-menu-probe").start()
+                        sendHeartbeat(application, param.processName)
+                        if (param.processName == THREADS_PACKAGE && started.compareAndSet(false, true)) {
+                            installViewDiagnostics()
+                            Thread({ discoverMenuMethods(application) }, "threads-menu-probe").start()
+                        }
                     }
                 }
+            )
+        }.onFailure {
+            XposedBridge.log("ThreadsEnhancer/Probe: attach hook falhou: $it")
+            XposedBridge.log(it)
+        }
+    }
+
+    private fun loadDexKit(context: Context): Boolean {
+        if (nativeLoaded.get()) return true
+
+        return synchronized(nativeLoaded) {
+            if (nativeLoaded.get()) return@synchronized true
+
+            runCatching {
+                val info = context.packageManager.getApplicationInfo(MODULE_PACKAGE, 0)
+                val nativeDir = info.nativeLibraryDir
+                    ?: error("nativeLibraryDir do módulo indisponível")
+                val library = File(nativeDir, "libdexkit.so")
+                require(library.isFile) { "libdexkit.so não encontrada em $nativeDir" }
+                System.load(library.absolutePath)
+                nativeLoaded.set(true)
+                XposedBridge.log("ThreadsEnhancer/Probe: DexKit carregado de ${library.absolutePath}")
+                true
+            }.getOrElse { error ->
+                XposedBridge.log("ThreadsEnhancer/Probe: carregamento DexKit falhou: $error")
+                XposedBridge.log(error)
+                false
             }
-        )
+        }
     }
 
     private fun discoverMenuMethods(context: Context) {
+        if (!loadDexKit(context)) return
+
         val keywords = listOf(
             "Copiar link", "Denunciar", "Salvar", "Não tenho interesse",
             "Copy link", "Report", "Save", "Not interested",
@@ -181,7 +213,7 @@ class NativeMenuProbeHook : IXposedHookLoadPackage {
 
         if (value is Iterable<*>) {
             return value.take(8).joinToString(
-                prefix = "${value.javaClass.name}[",
+                prefix = "${value.javaClass.name}["," + "
                 postfix = "]"
             ) { summarize(it, depth + 1, visited) }
         }
@@ -191,7 +223,7 @@ class NativeMenuProbeHook : IXposedHookLoadPackage {
             val parts = (0 until minOf(size, 8)).map {
                 summarize(Array.get(value, it), depth + 1, visited)
             }
-            return "${value.javaClass.name}${parts}"
+            return "${value.javaClass.name}$parts"
         }
 
         val fields = allFields(value.javaClass)
