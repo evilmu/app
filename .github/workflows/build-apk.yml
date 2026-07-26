@@ -20,14 +20,8 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      # Mantém a mesma assinatura de debug entre as próximas compilações.
-      # A primeira instalação 3.4.0 ainda exige remover a chave antiga; depois
-      # disso, as atualizações poderão usar pm install -r enquanto o cache existir.
-      - name: Restore signing key
-        uses: actions/cache@v4
-        with:
-          path: ~/.android/debug.keystore
-          key: threads-enhancer-debug-keystore-v1
+      - name: Restore stable signing key
+        run: base64 --decode ci/threads-enhancer.keystore.b64 > ci/threads-enhancer.keystore
 
       - name: Build debug APK
         run: gradle :app:assembleDebug
