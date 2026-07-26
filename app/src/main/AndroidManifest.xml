@@ -41,16 +41,25 @@
         </receiver>
 
         <activity
+            android:name=".share.ShareDownloadActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="Baixar com Threads Enhancer"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.ThreadsDownloader.Share">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
     </application>
