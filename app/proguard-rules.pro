@@ -1,12 +1,11 @@
-# Classes carregadas pelo ReLSPosed a partir de assets/xposed_init ou por reflexão.
--keep class br.gov.bomsucesso.threadsdownloader.hook.GeometryActivationHook { *; }
--keep class br.gov.bomsucesso.threadsdownloader.hook.GeometryActivationHook$* { *; }
--keep class br.gov.bomsucesso.threadsdownloader.hook.InlineActivationHook { *; }
--keep class br.gov.bomsucesso.threadsdownloader.hook.InlineActivationHook$* { *; }
--keep class br.gov.bomsucesso.threadsdownloader.hook.ActivationHook { *; }
--keep class br.gov.bomsucesso.threadsdownloader.hook.ActivationHook$* { *; }
--keep class br.gov.bomsucesso.threadsdownloader.hook.ThreadsHook { *; }
--keep class br.gov.bomsucesso.threadsdownloader.hook.ThreadsHook$* { *; }
+# Classes carregadas pelo ReLSPosed a partir de assets/xposed_init.
+-keep class br.gov.bomsucesso.threadsdownloader.hook.ShareBridgeHook { *; }
+-keep class br.gov.bomsucesso.threadsdownloader.hook.ShareBridgeHook$* { *; }
+
+# Activity exportada como destino de compartilhamento.
+-keep class br.gov.bomsucesso.threadsdownloader.share.ShareDownloadActivity { *; }
+-keep class br.gov.bomsucesso.threadsdownloader.share.PostMediaResolver { *; }
+-keep class br.gov.bomsucesso.threadsdownloader.share.PostMediaResolver$* { *; }
 
 -keepattributes *Annotation*,InnerClasses,EnclosingMethod
 -dontwarn de.robv.android.xposed.**
