@@ -1,4 +1,6 @@
 # Classes carregadas pelo ReLSPosed a partir de assets/xposed_init ou por reflexão.
+-keep class br.gov.bomsucesso.threadsdownloader.hook.GeometryActivationHook { *; }
+-keep class br.gov.bomsucesso.threadsdownloader.hook.GeometryActivationHook$* { *; }
 -keep class br.gov.bomsucesso.threadsdownloader.hook.InlineActivationHook { *; }
 -keep class br.gov.bomsucesso.threadsdownloader.hook.InlineActivationHook$* { *; }
 -keep class br.gov.bomsucesso.threadsdownloader.hook.ActivationHook { *; }
