@@ -20,8 +20,8 @@ android {
         applicationId = "br.gov.bomsucesso.threadsdownloader"
         minSdk = 26
         targetSdk = 35
-        versionCode = 50
-        versionName = "3.5.0-native-menu"
+        versionCode = 60
+        versionName = "3.6.0-native-menu-fix"
     }
 
     buildTypes {

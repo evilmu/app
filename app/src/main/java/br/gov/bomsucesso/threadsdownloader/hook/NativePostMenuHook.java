@@ -12,6 +12,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
 
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationHandler;
@@ -50,9 +51,10 @@ public final class NativePostMenuHook implements IXposedHookLoadPackage {
     private static final String THREADS_PACKAGE = "com.instagram.barcelona";
     private static final Uri PROVIDER_URI =
             Uri.parse("content://br.gov.bomsucesso.threadsdownloader.settings/current");
-    private static final String HOOK_VERSION = "3.5.0-native-menu";
+    private static final String HOOK_VERSION = "3.6.0-native-menu-fix";
 
     private static final AtomicBoolean INSTALLED = new AtomicBoolean(false);
+    private static final AtomicBoolean LIFECYCLE_REGISTERED = new AtomicBoolean(false);
     private static final ThreadLocal<ArrayDeque<MenuFrame>> MENU_STACK =
             ThreadLocal.withInitial(ArrayDeque::new);
     private static final ThreadLocal<Boolean> INJECTING =
@@ -64,6 +66,7 @@ public final class NativePostMenuHook implements IXposedHookLoadPackage {
     });
 
     private static volatile Application application;
+    private static volatile WeakReference<Activity> currentActivity = new WeakReference<>(null);
     private static volatile ClassLoader targetLoader;
     private static volatile Method rowMethod;
     private static volatile Method clickableMethod;
@@ -94,15 +97,17 @@ public final class NativePostMenuHook implements IXposedHookLoadPackage {
 
                         application = app;
                         sendHeartbeat(app, param.processName);
+                        registerActivityTracking(app);
 
                         if (THREADS_PACKAGE.equals(param.processName)
                                 && INSTALLED.compareAndSet(false, true)) {
                             targetLoader = param.classLoader;
+                            installRecentUrlHooks();
                             try {
                                 resolveNativeApi(param.classLoader);
                                 installMenuHooks(param.classLoader);
-                                installRecentUrlHooks();
                                 XposedBridge.log("ThreadsEnhancer/NativeMenu: hooks nativos instalados");
+                                sendEvent(app, "native_hooks_ready", HOOK_VERSION);
                             } catch (Throwable error) {
                                 reportError(app, "install", error);
                             }
@@ -124,33 +129,47 @@ public final class NativePostMenuHook implements IXposedHookLoadPackage {
         Class<?> roleClass = XposedHelpers.findClass("X.02yL", loader);
         Class<?> modifierSingletonClass = XposedHelpers.findClass("X.02vZ", loader);
 
-        rowMethod = rowClass.getDeclaredMethod(
+        rowMethod = findMethod(
+                rowClass,
                 "A0A",
-                composerClass,
-                modifierClass,
-                textStyleClass,
-                iconClass,
-                String.class
+                new Class<?>[]{composerClass, modifierClass, textStyleClass, iconClass, String.class},
+                5,
+                String.class,
+                true
         );
         rowMethod.setAccessible(true);
 
-        clickableMethod = clickableClass.getDeclaredMethod(
+        clickableMethod = findMethod(
+                clickableClass,
                 "A0F",
-                modifierClass,
-                roleClass,
-                Object.class,
-                String.class,
-                boolean.class
+                new Class<?>[]{modifierClass, roleClass, Object.class, String.class, boolean.class},
+                5,
+                boolean.class,
+                true
         );
         clickableMethod.setAccessible(true);
 
-        roleMethod = roleFactoryClass.getDeclaredMethod("A0i", int.class);
+        roleMethod = findMethod(
+                roleFactoryClass,
+                "A0i",
+                new Class<?>[]{int.class},
+                1,
+                int.class,
+                false
+        );
         roleMethod.setAccessible(true);
 
-        iconMethod = menuClass.getDeclaredMethod("A00", composerClass, int.class);
+        iconMethod = findMethod(
+                menuClass,
+                "A00",
+                new Class<?>[]{composerClass, int.class},
+                2,
+                int.class,
+                true
+        );
         iconMethod.setAccessible(true);
 
-        Field baseField = modifierSingletonClass.getDeclaredField("A02");
+        Field baseField = findStaticField(modifierSingletonClass, "A02", modifierClass);
         baseField.setAccessible(true);
         baseModifier = baseField.get(null);
 
@@ -159,9 +178,55 @@ public final class NativePostMenuHook implements IXposedHookLoadPackage {
         kotlinUnit = unitClass.getField("INSTANCE").get(null);
     }
 
+    private static Method findMethod(
+            Class<?> owner,
+            String name,
+            Class<?>[] exactTypes,
+            int parameterCount,
+            Class<?> edgeType,
+            boolean edgeAtEnd
+    ) throws NoSuchMethodException {
+        try {
+            return owner.getDeclaredMethod(name, exactTypes);
+        } catch (NoSuchMethodException ignored) {
+            for (Method candidate : owner.getDeclaredMethods()) {
+                if (!name.equals(candidate.getName())
+                        || candidate.getParameterTypes().length != parameterCount) {
+                    continue;
+                }
+                Class<?>[] types = candidate.getParameterTypes();
+                int edgeIndex = edgeAtEnd ? types.length - 1 : 0;
+                if (types.length > 0 && types[edgeIndex] == edgeType) return candidate;
+            }
+            throw new NoSuchMethodException(owner.getName() + "#" + name);
+        }
+    }
+
+    private static Field findStaticField(
+            Class<?> owner,
+            String preferredName,
+            Class<?> expectedType
+    ) throws NoSuchFieldException, IllegalAccessException {
+        try {
+            Field preferred = owner.getDeclaredField(preferredName);
+            if (Modifier.isStatic(preferred.getModifiers())) return preferred;
+        } catch (NoSuchFieldException ignored) {
+            // Procura pelo tipo abaixo para tolerar pequenas mudanças de ofuscação.
+        }
+
+        for (Field candidate : owner.getDeclaredFields()) {
+            if (!Modifier.isStatic(candidate.getModifiers())) continue;
+            if (expectedType.isAssignableFrom(candidate.getType())) return candidate;
+            candidate.setAccessible(true);
+            Object value = candidate.get(null);
+            if (value != null && expectedType.isInstance(value)) return candidate;
+        }
+        throw new NoSuchFieldException(owner.getName() + "#" + preferredName);
+    }
+
     private static void installMenuHooks(ClassLoader loader) throws Exception {
         Class<?> menuClass = XposedHelpers.findClass("X.0NyL", loader);
-        Method invoke = menuClass.getDeclaredMethod("invoke", Object.class, Object.class);
+        Method invoke = findInvokeMethod(menuClass);
         invoke.setAccessible(true);
 
         XposedBridge.hookMethod(invoke, new XC_MethodHook() {
@@ -187,16 +252,25 @@ public final class NativePostMenuHook implements IXposedHookLoadPackage {
                 if (Boolean.TRUE.equals(INJECTING.get())) return;
 
                 ArrayDeque<MenuFrame> stack = MENU_STACK.get();
-                MenuFrame frame = stack.peek();
-                if (frame == null || frame.injected) return;
-
-                frame.rowCount++;
+                MenuFrame stackedFrame = stack.peek();
                 String existingLabel = String.valueOf(param.args[4]);
                 boolean explicitAnchor = isAnchor(existingLabel);
-                boolean fallbackAnchor = frame.rowCount == 4;
+                if (stackedFrame == null && !explicitAnchor) return;
+
+                MenuFrame frame = stackedFrame != null
+                        ? stackedFrame
+                        : new MenuFrame(
+                                null,
+                                null,
+                                currentActivity.get(),
+                                application
+                        );
+                if (frame.injected) return;
+
+                frame.rowCount++;
+                boolean fallbackAnchor = stackedFrame != null && frame.rowCount == 4;
                 if (!explicitAnchor && !fallbackAnchor) return;
 
-                frame.injected = true;
                 try {
                     INJECTING.set(true);
                     Object composer = param.args[0];
@@ -217,14 +291,96 @@ public final class NativePostMenuHook implements IXposedHookLoadPackage {
                             "Opções de download",
                             () -> onDownloadOptions(frame)
                     );
-                    sendEvent(frame.contextOrApplication(), "menu_injected", existingLabel);
+                    frame.injected = true;
+                    String route = stackedFrame == null ? "anchor_fallback" : "post_context";
+                    sendEvent(
+                            frame.contextOrApplication(),
+                            "menu_injected",
+                            route + ":" + existingLabel
+                    );
                     XposedBridge.log(
-                            "ThreadsEnhancer/NativeMenu: duas ações inseridas após '" + existingLabel + "'"
+                            "ThreadsEnhancer/NativeMenu: duas ações inseridas via " + route
+                                    + " após '" + existingLabel + "'"
                     );
                 } catch (Throwable error) {
                     reportError(frame.contextOrApplication(), "render", error);
                 } finally {
-                    INJECTING.set(false);
+                    INJECTING.remove();
+                }
+            }
+        });
+
+        deoptimizeIfSupported(invoke);
+    }
+
+    private static Method findInvokeMethod(Class<?> owner) throws NoSuchMethodException {
+        try {
+            return owner.getDeclaredMethod("invoke", Object.class, Object.class);
+        } catch (NoSuchMethodException ignored) {
+            for (Method candidate : owner.getDeclaredMethods()) {
+                if ("invoke".equals(candidate.getName())
+                        && candidate.getParameterTypes().length == 2) {
+                    return candidate;
+                }
+            }
+            throw new NoSuchMethodException(owner.getName() + "#invoke/2");
+        }
+    }
+
+    private static void deoptimizeIfSupported(Method method) {
+        try {
+            for (Method candidate : XposedBridge.class.getDeclaredMethods()) {
+                if (!"deoptimizeMethod".equals(candidate.getName())
+                        || candidate.getParameterTypes().length != 1) {
+                    continue;
+                }
+                candidate.setAccessible(true);
+                candidate.invoke(null, method);
+                XposedBridge.log("ThreadsEnhancer/NativeMenu: chamador desotimizado");
+                return;
+            }
+        } catch (Throwable error) {
+            XposedBridge.log("ThreadsEnhancer/NativeMenu deoptimize indisponível: " + error);
+        }
+    }
+
+    private static void registerActivityTracking(Application app) {
+        if (!LIFECYCLE_REGISTERED.compareAndSet(false, true)) return;
+        app.registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
+            @Override
+            public void onActivityCreated(Activity activity, Bundle state) {
+                currentActivity = new WeakReference<>(activity);
+            }
+
+            @Override
+            public void onActivityStarted(Activity activity) {
+                currentActivity = new WeakReference<>(activity);
+            }
+
+            @Override
+            public void onActivityResumed(Activity activity) {
+                currentActivity = new WeakReference<>(activity);
+            }
+
+            @Override
+            public void onActivityPaused(Activity activity) {
+                // Mantém a referência enquanto o bottom sheet é animado.
+            }
+
+            @Override
+            public void onActivityStopped(Activity activity) {
+                // O processo pode reutilizar a mesma Activity ao fechar o menu.
+            }
+
+            @Override
+            public void onActivitySaveInstanceState(Activity activity, Bundle state) {
+                // Sem estado próprio para salvar.
+            }
+
+            @Override
+            public void onActivityDestroyed(Activity activity) {
+                if (currentActivity.get() == activity) {
+                    currentActivity = new WeakReference<>(null);
                 }
             }
         });
@@ -629,13 +785,19 @@ public final class NativePostMenuHook implements IXposedHookLoadPackage {
 
     private static Object readField(Object owner, String name) {
         if (owner == null) return null;
-        try {
-            Field field = owner.getClass().getDeclaredField(name);
-            field.setAccessible(true);
-            return field.get(owner);
-        } catch (Throwable error) {
-            return null;
+        Class<?> type = owner.getClass();
+        while (type != null && type != Object.class) {
+            try {
+                Field field = type.getDeclaredField(name);
+                field.setAccessible(true);
+                return field.get(owner);
+            } catch (NoSuchFieldException ignored) {
+                type = type.getSuperclass();
+            } catch (Throwable error) {
+                return null;
+            }
         }
+        return null;
     }
 
     private static void sendHeartbeat(Context context, String processName) {
