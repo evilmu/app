@@ -24,10 +24,13 @@ Protótipo Android para capturar URLs de mídia carregadas pelo aplicativo Threa
 
 ## Funcionamento desta versão
 
-- O hook observa URLs criadas por `java.net.URL` e `android.net.Uri.parse`.
-- URLs prováveis de mídia são registradas no log do LSPosed.
-- O app aceita URL HTTPS direta e usa o `DownloadManager`.
-- O app também aparece no menu Compartilhar para textos e links.
+- A versão 3.6.0 injeta **Baixar** e **Opções de download** no menu nativo de
+  três pontos do Threads 439.1.0.43.89.
+- A detecção usa o contexto exato da publicação e possui uma segunda rota pelo
+  item **Copiar link** quando o ReLSPosed não intercepta o wrapper do menu.
+- O hook observa URLs criadas por `java.net.URL` e `android.net.Uri.parse` para
+  localizar a mídia carregada pelo Threads.
+- O app usa o `DownloadManager` para salvar os arquivos em `Downloads/Threads`.
 
 ## Limitações
 

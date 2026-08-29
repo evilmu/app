@@ -3,7 +3,7 @@ name: Build APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, agent/build-apk ]
   pull_request:
     branches: [ main, master ]
 
@@ -19,9 +19,26 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
+      - name: Restore stable signing key
+        run: base64 --decode ci/threads-enhancer.keystore.b64 > ci/threads-enhancer.keystore
+
       - name: Build debug APK
-        run: gradle :app:assembleDebug
-      - uses: actions/upload-artifact@v4
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug 2>&1 | tee build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
         with:
           name: ThreadsDownloader-debug
           path: app/build/outputs/apk/debug/app-debug.apk

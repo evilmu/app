@@ -2,4 +2,12 @@
     <style name="Theme.ThreadsDownloader" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowLightStatusBar">false</item>
     </style>
+
+    <style name="Theme.ThreadsDownloader.Share" parent="Theme.Material3.DayNight.Dialog.Alert">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:navigationBarColor">#0C0F0D</item>
+        <item name="colorPrimary">#58D664</item>
+        <item name="colorSecondary">#58D664</item>
+    </style>
 </resources>
