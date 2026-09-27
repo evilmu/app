@@ -22,7 +22,7 @@ import java.util.Locale
 class ThreadsHook : IXposedHookLoadPackage {
     companion object {
         private const val THREADS = "com.instagram.barcelona"
-        private const val MODULE = "br.gov.bomsucesso.threadsdownloader"
+        private const val MODULE = "br.gov.bomsucesso.threadsdownloader.fixed"
         private const val CAPTURED = "$MODULE.MEDIA_CAPTURED"
         private const val READY = "$MODULE.HOOK_READY"
         private val seen = LinkedHashMap<String, Long>(128, 0.75f, true)
@@ -114,7 +114,7 @@ class ThreadsHook : IXposedHookLoadPackage {
         val app = context ?: return
         runCatching {
             val intent = Intent(action)
-                .setComponent(ComponentName(MODULE, "$MODULE.CapturedMediaReceiver"))
+                .setComponent(ComponentName(MODULE, "br.gov.bomsucesso.threadsdownloader.CapturedMediaReceiver"))
             if (url != null) intent.putExtra("url", url)
             app.sendBroadcast(intent)
         }.onFailure { XposedBridge.log("ThreadsEnhancer broadcast: " + it.javaClass.simpleName) }
