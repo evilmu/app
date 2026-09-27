@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">Threads Downloader</string>
+    <string name="app_name">Threads Downloader FIX</string>
     <string name="module_description">Captura URLs de mídia do Threads com ReLSPosed e baixa arquivos verificados para Downloads/Threads.</string>
 </resources>
