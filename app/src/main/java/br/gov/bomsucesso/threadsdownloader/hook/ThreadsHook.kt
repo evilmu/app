@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ThreadsHook : IXposedHookLoadPackage {
     companion object {
         private const val THREADS = "com.instagram.barcelona"
-        private const val MODULE = "br.gov.bomsucesso.threadsinline"
+        private const val MODULE = "br.gov.bomsucesso.threadsdownloader.fixed"
         private val installed = AtomicBoolean(false)
     }
 
@@ -37,7 +37,7 @@ class ThreadsHook : IXposedHookLoadPackage {
                     }.getOrNull() ?: "desconhecida"
                     XposedBridge.log("ThreadsInline: Threads versão $version; registro dos hooks por post")
                     runCatching {
-                        NativeInlineHook.install(host.classLoader)
+                        NativeInlineHook.install(param.classLoader)
                         host.sendBroadcast(
                             Intent("$MODULE.HOOK_READY")
                                 .setComponent(ComponentName(MODULE,
