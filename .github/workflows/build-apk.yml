@@ -25,6 +25,17 @@ jobs:
           gradle-version: '8.9'
       - name: Unit tests and build
         run: gradle :app:testDebugUnitTest :app:assembleDebug --stacktrace
+      - name: Verify package and APK signature
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          "$BT/apksigner" verify --min-sdk-version 26 --verbose --print-certs "$APK"
+          "$BT/aapt" dump badging "$APK" | tee /tmp/apk-badging.txt
+          grep -F "name='br.gov.bomsucesso.threadsdownloader.fixed'" /tmp/apk-badging.txt
+          grep -F "sdkVersion:'26'" /tmp/apk-badging.txt
+          grep -F "br.gov.bomsucesso.threadsdownloader.MainActivity" /tmp/apk-badging.txt
+          unzip -t "$APK" | tail -n 2
       - name: Publish test summary
         if: always()
         uses: actions/upload-artifact@v4
@@ -36,6 +47,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ThreadsDownloader-v3.6.0-debug-apk
+          name: ThreadsDownloader-v3.6.1-install-fix-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
