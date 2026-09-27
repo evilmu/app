@@ -6,11 +6,11 @@ android {
     namespace = "br.gov.bomsucesso.threadsdownloader"
     compileSdk = 35
     defaultConfig {
-        applicationId = "br.gov.bomsucesso.threadsdownloader"
+        applicationId = "br.gov.bomsucesso.threadsdownloader.fixed"
         minSdk = 26
         targetSdk = 35
-        versionCode = 36
-        versionName = "3.6.0-download-fix"
+        versionCode = 37
+        versionName = "3.6.1-installer-fix"
     }
     buildFeatures { buildConfig = true }
     kotlinOptions { jvmTarget = "17" }
