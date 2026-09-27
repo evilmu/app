@@ -22,8 +22,8 @@ class ThreadsHook : IXposedHookLoadPackage {
         private val installed = AtomicBoolean(false)
     }
 
-    override fun handleLoadPackage(param: XC_LoadPackage.LoadPackageParam) {
-        if (param.packageName != THREADS || param.processName != THREADS) return
+    override fun handleLoadPackage(load: XC_LoadPackage.LoadPackageParam) {
+        if (load.packageName != THREADS || load.processName != THREADS) return
         XposedHelpers.findAndHookMethod(
             Application::class.java,
             "attach",
@@ -37,7 +37,7 @@ class ThreadsHook : IXposedHookLoadPackage {
                     }.getOrNull() ?: "desconhecida"
                     XposedBridge.log("ThreadsInline: Threads versão $version; registro dos hooks por post")
                     runCatching {
-                        NativeInlineHook.install(param.classLoader)
+                        NativeInlineHook.install(load.classLoader)
                         host.sendBroadcast(
                             Intent("$MODULE.HOOK_READY")
                                 .setComponent(ComponentName(MODULE,
