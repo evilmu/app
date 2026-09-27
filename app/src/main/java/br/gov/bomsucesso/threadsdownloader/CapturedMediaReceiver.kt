@@ -18,7 +18,7 @@ class CapturedMediaReceiver : BroadcastReceiver() {
     }
 
     companion object {
-        const val ACTION_CAPTURED = "br.gov.bomsucesso.threadsdownloader.MEDIA_CAPTURED"
-        const val ACTION_READY = "br.gov.bomsucesso.threadsdownloader.HOOK_READY"
+        const val ACTION_CAPTURED = "br.gov.bomsucesso.threadsdownloader.fixed.MEDIA_CAPTURED"
+        const val ACTION_READY = "br.gov.bomsucesso.threadsdownloader.fixed.HOOK_READY"
     }
 }
