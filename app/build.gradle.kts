@@ -9,8 +9,8 @@ android {
         applicationId = "br.gov.bomsucesso.threadsdownloader.fixed"
         minSdk = 26
         targetSdk = 35
-        versionCode = 37
-        versionName = "3.6.1-installer-fix"
+        versionCode = 38
+        versionName = "3.7.0-inline-post"
     }
     buildFeatures { buildConfig = true }
     kotlinOptions { jvmTarget = "17" }
