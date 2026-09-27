@@ -6,7 +6,7 @@ android {
     namespace = "br.gov.bomsucesso.threadsdownloader"
     compileSdk = 35
     defaultConfig {
-        applicationId = "br.gov.bomsucesso.threadsdownloader.fixed"
+        applicationId = "br.gov.bomsucesso.threadsdownloader.inlinepost"
         minSdk = 26
         targetSdk = 35
         versionCode = 38
