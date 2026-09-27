@@ -90,7 +90,7 @@ class ThreadsHook : IXposedHookLoadPackage {
                 lower.contains(".mp4") || lower.contains(".m4v") ||
                 lower.contains(".jpg") || lower.contains(".jpeg") ||
                 lower.contains(".webp") || lower.contains(".png"))) return
-        val uri = runCatching { Uri.parse(raw) }.getOrNull() ?: return
+        val uri = runCatching { java.net.URI(raw) }.getOrNull() ?: return
         val host = uri.host?.lowercase(Locale.ROOT) ?: return
         if (!(host == "fbcdn.net" || host.endsWith(".fbcdn.net") ||
                 host == "cdninstagram.com" || host.endsWith(".cdninstagram.com"))) return
