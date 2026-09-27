@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class ThreadsHook : IXposedHookLoadPackage {
     companion object {
         private const val THREADS = "com.instagram.barcelona"
-        private const val MODULE = "br.gov.bomsucesso.threadsdownloader.fixed"
+        private const val MODULE = "br.gov.bomsucesso.threadsdownloader.inlinepost"
         private val installed = AtomicBoolean(false)
     }
 
