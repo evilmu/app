@@ -11,8 +11,8 @@
         <meta-data android:name="xposedminversion" android:value="82" />
         <receiver android:name="br.gov.bomsucesso.threadsdownloader.CapturedMediaReceiver" android:exported="true">
             <intent-filter>
-                <action android:name="br.gov.bomsucesso.threadsdownloader.fixed.MEDIA_CAPTURED" />
-                <action android:name="br.gov.bomsucesso.threadsdownloader.fixed.HOOK_READY" />
+                <action android:name="br.gov.bomsucesso.threadsdownloader.inlinepost.MEDIA_CAPTURED" />
+                <action android:name="br.gov.bomsucesso.threadsdownloader.inlinepost.HOOK_READY" />
             </intent-filter>
         </receiver>
         <activity android:name="br.gov.bomsucesso.threadsdownloader.MainActivity" android:exported="true">
