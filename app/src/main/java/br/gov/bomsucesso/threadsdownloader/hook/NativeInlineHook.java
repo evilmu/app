@@ -61,27 +61,7 @@ public final class NativeInlineHook {
         // Its invoke() is the reliable moment when the selected post is opened.
         XC_MethodHook selectedPostHook = new XC_MethodHook() {
             @Override protected void beforeHookedMethod(MethodHookParam param) {
-                Pending selected = PENDING.get();
-                if (selected == null) return;
-                if (System.currentTimeMillis() > selected.deadline) {
-                    PENDING.compareAndSet(selected, null);
-                    return;
-                }
-                Object media;
-                try { media = XposedHelpers.getObjectField(param.thisObject, "A0B"); }
-                catch (Throwable problem) {
-                    XposedBridge.log("ThreadsInline: campo A0B indisponível: " +
-                        problem.getClass().getSimpleName());
-                    return;
-                }
-                if (media == null || !PENDING.compareAndSet(selected, null)) return;
-                Activity activity = selected.activity.get();
-                if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
-                final Object ownMedia = media;
-                activity.runOnUiThread(() -> {
-                    XposedBridge.log("ThreadsInline: post selecionado vinculado ao download");
-                    MediaFromPost.download(activity.getApplicationContext(), ownMedia);
-                });
+                captureSelectedPost(param.thisObject);
             }
         };
         // Hook both the lambda and the constructor: some 439.x builds allocate
@@ -100,7 +80,7 @@ public final class NativeInlineHook {
             @Override protected void afterHookedMethod(MethodHookParam param) {
                 // Constructor fallback is useful only when the menu is allocated
                 // on demand after the user's click. invoke() handles reused menus.
-                selectedPostHook.beforeHookedMethod(param);
+                captureSelectedPost(param.thisObject);
             }
         });
         XposedBridge.hookAllMethods(Activity.class, "onResume", new XC_MethodHook() {
@@ -134,6 +114,30 @@ public final class NativeInlineHook {
             }
         });
         XposedBridge.log("ThreadsInline: hooks de post e interface registrados");
+    }
+
+    private static void captureSelectedPost(Object sheet) {
+        Pending selected = PENDING.get();
+        if (selected == null) return;
+        if (System.currentTimeMillis() > selected.deadline) {
+            PENDING.compareAndSet(selected, null);
+            return;
+        }
+        Object media;
+        try { media = XposedHelpers.getObjectField(sheet, "A0B"); }
+        catch (Throwable problem) {
+            XposedBridge.log("ThreadsInline: A0B indisponível: " +
+                    problem.getClass().getSimpleName());
+            return;
+        }
+        if (media == null || !PENDING.compareAndSet(selected, null)) return;
+        Activity activity = selected.activity.get();
+        if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
+        final Object ownMedia = media;
+        activity.runOnUiThread(() -> {
+            XposedBridge.log("ThreadsInline: mídia da publicação selecionada vinculada");
+            MediaFromPost.download(activity.getApplicationContext(), ownMedia);
+        });
     }
 
     private static final class Pending {
