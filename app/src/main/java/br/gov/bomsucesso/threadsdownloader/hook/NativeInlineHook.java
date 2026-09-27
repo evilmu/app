@@ -57,29 +57,50 @@ public final class NativeInlineHook {
             XposedBridge.log("ThreadsInline: PostActionMenuSheet hook ausente; versão do Threads incompatível");
             return;
         }
-        XposedBridge.hookAllConstructors(sheet, new XC_MethodHook() {
-            @Override
-            protected void afterHookedMethod(MethodHookParam param) {
+        // A Compose menu lambda may be constructed while the feed is first loaded.
+        // Its invoke() is the reliable moment when the selected post is opened.
+        XC_MethodHook selectedPostHook = new XC_MethodHook() {
+            @Override protected void beforeHookedMethod(MethodHookParam param) {
                 Pending selected = PENDING.get();
                 if (selected == null) return;
                 if (System.currentTimeMillis() > selected.deadline) {
                     PENDING.compareAndSet(selected, null);
                     return;
                 }
-                Object media = null;
+                Object media;
                 try { media = XposedHelpers.getObjectField(param.thisObject, "A0B"); }
                 catch (Throwable problem) {
-                    XposedBridge.log("ThreadsInline: não foi possível ler mídia da publicação");
+                    XposedBridge.log("ThreadsInline: campo A0B indisponível: " +
+                        problem.getClass().getSimpleName());
+                    return;
                 }
-                if (media == null) return;
-                if (!PENDING.compareAndSet(selected, null)) return;
+                if (media == null || !PENDING.compareAndSet(selected, null)) return;
                 Activity activity = selected.activity.get();
-                if (activity == null || activity.isFinishing()) return;
+                if (activity == null || activity.isFinishing() || activity.isDestroyed()) return;
                 final Object ownMedia = media;
                 activity.runOnUiThread(() -> {
-                    XposedBridge.log("ThreadsInline: download iniciado a partir da mídia vinculada ao post");
+                    XposedBridge.log("ThreadsInline: post selecionado vinculado ao download");
                     MediaFromPost.download(activity.getApplicationContext(), ownMedia);
                 });
+            }
+        };
+        // Hook both the lambda and the constructor: some 439.x builds allocate
+        // the menu lazily; others reuse a lambda created before the click.
+        int invokeHooks = 0;
+        for (java.lang.reflect.Method method : sheet.getDeclaredMethods()) {
+            if (!method.getName().equals("invoke") || method.getParameterTypes().length != 2)
+                continue;
+            XposedBridge.hookMethod(method, selectedPostHook);
+            invokeHooks++;
+        }
+        if (invokeHooks == 0) {
+            XposedBridge.log("ThreadsInline: invoke/2 ausente; menu incompatível");
+        }
+        XposedBridge.hookAllConstructors(sheet, new XC_MethodHook() {
+            @Override protected void afterHookedMethod(MethodHookParam param) {
+                // Constructor fallback is useful only when the menu is allocated
+                // on demand after the user's click. invoke() handles reused menus.
+                selectedPostHook.beforeHookedMethod(param);
             }
         });
         XposedBridge.hookAllMethods(Activity.class, "onResume", new XC_MethodHook() {
