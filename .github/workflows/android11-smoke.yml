@@ -47,6 +47,9 @@ jobs:
           "$BT/apksigner" verify --min-sdk-version 21 --verbose --print-certs "$APK" | tee signing-report.txt
           grep -F 'Verified using v1 scheme (JAR signing): true' signing-report.txt
           grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' signing-report.txt
+      - name: Enable KVM acceleration (when available)
+        run: |
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm; ls -l /dev/kvm; else echo "No KVM, using software virtualization"; fi
       - name: Install and launch on Android 11 emulator (API 30)
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -55,18 +58,19 @@ jobs:
           arch: x86_64
           profile: pixel_2
           emulator-boot-timeout: 900
-          disable-animations: true
+          disable-animations: false
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
             set -eux
             APK=app/build/outputs/apk/debug/app-debug.apk
+            adb wait-for-device
+            adb shell getprop ro.build.version.sdk | grep -Fx 30
             adb install -r "$APK"
             adb shell pm path br.gov.bomsucesso.threadsdownloader.inlinepost
             adb shell am start -n br.gov.bomsucesso.threadsdownloader.inlinepost/br.gov.bomsucesso.threadsdownloader.MainActivity
             sleep 6
             adb shell dumpsys activity activities > android11-activities.txt
             grep -F br.gov.bomsucesso.threadsdownloader.inlinepost android11-activities.txt
-            adb shell screencap -p /sdcard/android11-app.png
-            adb pull /sdcard/android11-app.png android11-app.png
             adb logcat -d -t 500 > android11-logcat.txt
       - name: Publish Android 11 validation evidence
         if: always()
@@ -76,6 +80,5 @@ jobs:
           path: |
             signing-report.txt
             android11-activities.txt
-            android11-app.png
             android11-logcat.txt
           if-no-files-found: ignore
