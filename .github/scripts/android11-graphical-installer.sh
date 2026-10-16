@@ -5,8 +5,11 @@ APK="apk/ThreadsEnhancer-3.7.2-Android11.apk"
 echo "Creating a Download provider entry for the exact released APK"
 INSERT_RESULT=$(adb shell content insert --uri content://media/external/downloads --bind _display_name:s:ThreadsEnhancer-3.7.2.apk --bind mime_type:s:application/vnd.android.package-archive --bind relative_path:s:Download/ | tr -d '\r')
 echo "MediaStore response: $INSERT_RESULT"
-URI=$(printf '%s\n' "$INSERT_RESULT" | grep -oE 'content://media/[^ ]+' | head -1)
-test -n "$URI"
+QUERY_RESULT=$(adb shell content query --uri content://media/external/downloads --projection _id:_display_name --where "_display_name=\'ThreadsEnhancer-3.7.2.apk\'" 2>&1 | tr -d '\r')
+echo "MediaStore query: $QUERY_RESULT"
+ROW_ID=$(printf '%s\n' "$QUERY_RESULT" | grep -oE "_id=[0-9]+" | tail -1 | cut -d= -f2)
+test -n "$ROW_ID"
+URI="content://media/external/downloads/$ROW_ID"
 echo "Writing APK to MediaStore URI: $URI"
 adb shell content write --uri "$URI" < "$APK"
 
