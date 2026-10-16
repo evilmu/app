@@ -9,8 +9,14 @@ android {
         applicationId = "br.gov.bomsucesso.threadsdownloader.inlinepost"
         minSdk = 26
         targetSdk = 32
-        versionCode = 39
-        versionName = "3.7.1-installer-fix"
+        versionCode = 40
+        versionName = "3.7.2-signed"
+    }
+    signingConfigs {
+        getByName("debug") {
+            enableV1Signing = true
+            enableV2Signing = true
+        }
     }
     buildFeatures { buildConfig = true }
     kotlinOptions { jvmTarget = "17" }
