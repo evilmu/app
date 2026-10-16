@@ -47,10 +47,9 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none -camera-front none
           script: |
             set -eux
-            APK=apk/ThreadsEnhancer-3.7.2-Android11.apk
             adb wait-for-device
             adb shell getprop ro.build.version.sdk | grep -Fx 30
-            adb install -r "$APK"
+            adb install -r apk/ThreadsEnhancer-3.7.2-Android11.apk
             adb shell pm path br.gov.bomsucesso.threadsdownloader.inlinepost
             adb shell am start -n br.gov.bomsucesso.threadsdownloader.inlinepost/br.gov.bomsucesso.threadsdownloader.MainActivity
             sleep 5
