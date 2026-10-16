@@ -1,0 +1,33 @@
+name: Publish Direct APK Prerelease
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/publish-apk-prerelease.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download tested APK from successful build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run download 38849495691 --repo "$GITHUB_REPOSITORY" --name ThreadsEnhancer-v3.7.2-android11-apk --dir /tmp/threads-apk
+          cp /tmp/threads-apk/app-debug.apk /tmp/ThreadsEnhancer-3.7.2-Android11.apk
+          echo "64e572b05b8e7274c5d2ee31f7f300098cb167689c614f7ea9c02d6b437c5ea5  /tmp/ThreadsEnhancer-3.7.2-Android11.apk" | sha256sum --check
+      - name: Publish pre-release with direct .apk asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create v3.7.2-android11 /tmp/ThreadsEnhancer-3.7.2-Android11.apk --repo "$GITHUB_REPOSITORY" --target "${{ github.sha }}" --title "ThreadsEnhancer 3.7.2 Android 11 (teste)" --prerelease --notes "APK assinado com esquemas v1 e v2. Teste de instalação no Android 11; o botão interno no Threads ainda requer validação no dispositivo com ReLSPosed. Arquivo SHA-256: 64e572b05b8e7274c5d2ee31f7f300098cb167689c614f7ea9c02d6b437c5ea5."
