@@ -8,9 +8,15 @@ android {
     defaultConfig {
         applicationId = "br.gov.bomsucesso.threadsdownloader.inlinepost"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 38
-        versionName = "3.7.0-inline-post"
+        targetSdk = 32
+        versionCode = 39
+        versionName = "3.7.1-installer-fix"
+    }
+    buildTypes {
+        getByName("debug") {
+            isV1SigningEnabled = true
+            isV2SigningEnabled = true
+        }
     }
     buildFeatures { buildConfig = true }
     kotlinOptions { jvmTarget = "17" }
