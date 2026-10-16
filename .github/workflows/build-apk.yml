@@ -31,17 +31,16 @@ jobs:
           APK=app/build/outputs/apk/debug/app-debug.apk
           BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
           test -f "$HOME/.android/debug.keystore"
-          "$BT/apksigner" sign --ks "$HOME/.android/debug.keystore" \\
-            --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android \\
-            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled false \\
-            --out "${APK}.signed" "$APK"
+          "$BT/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled false --out "${APK}.signed" "$APK"
           mv "${APK}.signed" "$APK"
       - name: Verify package and APK signature
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
           BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
-          "$BT/apksigner" verify --min-sdk-version 26 --verbose --print-certs "$APK" | tee /tmp/signature-report.txt\n          grep -F "Verified using v1 scheme (JAR signing): true" /tmp/signature-report.txt\n          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/signature-report.txt
+          "$BT/apksigner" verify --min-sdk-version 26 --verbose --print-certs "$APK" | tee /tmp/signature-report.txt
+          grep -F "Verified using v1 scheme (JAR signing): true" /tmp/signature-report.txt
+          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/signature-report.txt
           "$BT/aapt" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -F "name='br.gov.bomsucesso.threadsdownloader.inlinepost'" /tmp/apk-badging.txt
           grep -F "sdkVersion:'26'" /tmp/apk-badging.txt
