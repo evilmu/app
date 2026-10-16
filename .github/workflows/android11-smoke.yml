@@ -44,7 +44,7 @@ jobs:
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
           BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
-          "$BT/apksigner" verify --min-sdk-version 26 --verbose --print-certs "$APK" | tee signing-report.txt
+          "$BT/apksigner" verify --min-sdk-version 21 --verbose --print-certs "$APK" | tee signing-report.txt
           grep -F 'Verified using v1 scheme (JAR signing): true' signing-report.txt
           grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' signing-report.txt
       - name: Install and launch on Android 11 emulator (API 30)
