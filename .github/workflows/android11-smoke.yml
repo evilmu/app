@@ -6,6 +6,7 @@ on:
     branches: [master, main]
     paths:
       - '.github/workflows/android11-smoke.yml'
+      - '.github/scripts/android11-graphical-installer.sh'
 
 permissions:
   contents: read
@@ -49,13 +50,7 @@ jobs:
             set -eux
             adb wait-for-device
             adb shell getprop ro.build.version.sdk | grep -Fx 30
-            adb push apk/ThreadsEnhancer-3.7.2-Android11.apk /sdcard/Download/ThreadsEnhancer-3.7.2.apk
-            adb shell am start -a android.intent.action.VIEW -d file:///sdcard/Download/ThreadsEnhancer-3.7.2.apk -t application/vnd.android.package-archive || true
-            sleep 5
-            adb shell uiautomator dump /sdcard/android11-installer.xml || true
-            adb pull /sdcard/android11-installer.xml android11-installer.xml || true
-            adb shell screencap -p /sdcard/android11-installer.png || true
-            adb pull /sdcard/android11-installer.png android11-installer.png || true
+            bash .github/scripts/android11-graphical-installer.sh
             adb install -r apk/ThreadsEnhancer-3.7.2-Android11.apk
             adb shell pm path br.gov.bomsucesso.threadsdownloader.inlinepost
             adb shell am start -n br.gov.bomsucesso.threadsdownloader.inlinepost/br.gov.bomsucesso.threadsdownloader.MainActivity
@@ -73,5 +68,7 @@ jobs:
             android11-activities.txt
             android11-installer.xml
             android11-installer.png
+            android11-graphical-intent.txt
+            android11-graphical-activities.txt
             android11-logcat.txt
           if-no-files-found: ignore
