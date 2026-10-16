@@ -30,7 +30,10 @@ jobs:
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
           BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
-          test -f "$HOME/.android/debug.keystore"
+          mkdir -p "$HOME/.android"
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -noprompt -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -keystore "$HOME/.android/debug.keystore" -storepass android -keypass android -dname "CN=Android Debug,O=Android,C=US"
+          fi
           "$BT/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled false --out "${APK}.signed" "$APK"
           mv "${APK}.signed" "$APK"
       - name: Verify package and APK signature
