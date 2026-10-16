@@ -1,0 +1,70 @@
+name: Android 11 Installation Smoke Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [master, main]
+    paths:
+      - 'app/**'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - '.github/workflows/android11-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android11-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Assemble signed APK
+        run: gradle :app:assembleDebug --stacktrace
+      - name: Verify APK signature for Android 11
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          "$BT/apksigner" verify --min-sdk-version 26 --verbose --print-certs "$APK" | tee signing-report.txt
+          grep -F 'Verified using v1 scheme (JAR signing): true' signing-report.txt
+          grep -F 'Verified using v2 scheme (APK Signature Scheme v2): true' signing-report.txt
+      - name: Install and launch on Android 11 emulator (API 30)
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          emulator-boot-timeout: 900
+          disable-animations: true
+          script: |
+            set -eux
+            APK=app/build/outputs/apk/debug/app-debug.apk
+            adb install -r "$APK"
+            adb shell pm path br.gov.bomsucesso.threadsdownloader.inlinepost
+            adb shell am start -n br.gov.bomsucesso.threadsdownloader.inlinepost/br.gov.bomsucesso.threadsdownloader.MainActivity
+            sleep 6
+            adb shell dumpsys activity activities > android11-activities.txt
+            grep -F br.gov.bomsucesso.threadsdownloader.inlinepost android11-activities.txt
+            adb shell screencap -p /sdcard/android11-app.png
+            adb pull /sdcard/android11-app.png android11-app.png
+            adb logcat -d -t 500 > android11-logcat.txt
+      - name: Publish Android 11 validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android11-install-smoke-evidence
+          path: |
+            signing-report.txt
+            android11-activities.txt
+            android11-app.png
+            android11-logcat.txt
+          if-no-files-found: ignore
