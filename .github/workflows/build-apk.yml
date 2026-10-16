@@ -25,12 +25,23 @@ jobs:
           gradle-version: '8.9'
       - name: Unit tests and build
         run: gradle :app:testDebugUnitTest :app:assembleDebug --stacktrace
+      - name: Sign APK explicitly with legacy and modern Android schemes
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          test -f "$HOME/.android/debug.keystore"
+          "$BT/apksigner" sign --ks "$HOME/.android/debug.keystore" \\
+            --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android \\
+            --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled false \\
+            --out "${APK}.signed" "$APK"
+          mv "${APK}.signed" "$APK"
       - name: Verify package and APK signature
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/debug/app-debug.apk
           BT=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
-          "$BT/apksigner" verify --min-sdk-version 26 --verbose --print-certs "$APK"
+          "$BT/apksigner" verify --min-sdk-version 26 --verbose --print-certs "$APK" | tee /tmp/signature-report.txt\n          grep -F "Verified using v1 scheme (JAR signing): true" /tmp/signature-report.txt\n          grep -F "Verified using v2 scheme (APK Signature Scheme v2): true" /tmp/signature-report.txt
           "$BT/aapt" dump badging "$APK" | tee /tmp/apk-badging.txt
           grep -F "name='br.gov.bomsucesso.threadsdownloader.inlinepost'" /tmp/apk-badging.txt
           grep -F "sdkVersion:'26'" /tmp/apk-badging.txt
@@ -47,6 +58,6 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ThreadsEnhancer-v3.7.0-inline-post-apk
+          name: ThreadsEnhancer-v3.7.2-android11-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
