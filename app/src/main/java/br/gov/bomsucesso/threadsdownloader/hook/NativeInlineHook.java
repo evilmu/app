@@ -64,8 +64,7 @@ public final class NativeInlineHook {
                 captureSelectedPost(param.thisObject);
             }
         };
-        // Hook both the lambda and the constructor: some 439.x builds allocate
-        // the menu lazily; others reuse a lambda created before the click.
+        // Hook the actual menu invocation; construction can occur off-screen.
         int invokeHooks = 0;
         for (java.lang.reflect.Method method : sheet.getDeclaredMethods()) {
             if (!method.getName().equals("invoke") || method.getParameterTypes().length != 2)
@@ -76,13 +75,8 @@ public final class NativeInlineHook {
         if (invokeHooks == 0) {
             XposedBridge.log("ThreadsInline: invoke/2 ausente; menu incompatível");
         }
-        XposedBridge.hookAllConstructors(sheet, new XC_MethodHook() {
-            @Override protected void afterHookedMethod(MethodHookParam param) {
-                // Constructor fallback is useful only when the menu is allocated
-                // on demand after the user's click. invoke() handles reused menus.
-                captureSelectedPost(param.thisObject);
-            }
-        });
+        // Do not bind a preconstructed menu to an unrelated post. Only a
+        // currently invoked menu may resolve the pending user-selected post.
         XposedBridge.hookAllMethods(Activity.class, "onResume", new XC_MethodHook() {
             @Override protected void afterHookedMethod(MethodHookParam param) {
                 Activity activity = (Activity) param.thisObject;
