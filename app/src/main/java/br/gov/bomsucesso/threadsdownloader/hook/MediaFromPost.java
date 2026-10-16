@@ -52,13 +52,10 @@ final class MediaFromPost {
                     XposedBridge.log("ThreadsInline: mídia do post sem URL direta (sem usar outra publicação)");
                     return;
                 }
-                // Prefer playable video to thumbnails; include all carousel items.
-                boolean videoFound = false;
-                for (Candidate item : found) if (item.video) videoFound = true;
+                // Keep both photos and videos in mixed-media carousel posts.
                 int saved = 0;
                 String lastError = null;
                 for (Candidate item : found) {
-                    if (videoFound && !item.video) continue;
                     try {
                         save(host, item);
                         saved++;
@@ -67,7 +64,7 @@ final class MediaFromPost {
                         XposedBridge.log("ThreadsInline: download falhou: " + error.getClass().getSimpleName());
                     }
                     // A single post may have a large media carousel. Prevent abusive fanout.
-                    if (saved >= 10) break;
+                    if (saved >= 20) break;
                 }
                 if (saved > 0) notifyUser(host, saved + (saved == 1
                         ? " arquivo salvo em Downloads/Threads"
